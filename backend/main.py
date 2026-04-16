@@ -1,0 +1,177 @@
+import io
+import pandas as pd
+from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+
+from src.db import init_db, load_dataframe, insert_dataframe, insert_transaction
+from src.preprocessing import clean_dataframe
+from src.rfm import compute_rfm
+from src.clustering import add_clusters
+from src.recommender import build_item_matrix, get_recommendations
+
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+init_db()
+
+
+def get_pipeline():
+    df = load_dataframe()
+    if df.empty:
+        return None, None, None
+    rfm = compute_rfm(df)
+    rfm = add_clusters(rfm)
+    matrix = build_item_matrix(df)
+    return df, rfm, matrix
+
+
+@app.get("/api/stats")
+def stats():
+    df, _, _ = get_pipeline()
+    if df is None:
+        return {"revenue": 0, "customers": 0, "transactions": 0}
+    return {
+        "revenue":      round(float(df["TotalPrice"].sum()), 2),
+        "customers":    int(df["CustomerID"].nunique()),
+        "transactions": int(df["InvoiceNo"].nunique()),
+    }
+
+
+@app.get("/api/revenue/monthly")
+def monthly_revenue():
+    df, _, _ = get_pipeline()
+    if df is None:
+        return []
+    monthly = (
+        df.groupby(df["InvoiceDate"].dt.to_period("M"))["TotalPrice"]
+        .sum()
+        .reset_index()
+    )
+    monthly["InvoiceDate"] = monthly["InvoiceDate"].astype(str)
+    monthly.columns = ["month", "revenue"]
+    monthly["revenue"] = monthly["revenue"].round(2)
+    return monthly.to_dict(orient="records")
+
+
+@app.get("/api/segments")
+def segments():
+    _, rfm, _ = get_pipeline()
+    if rfm is None:
+        return {"averages": [], "counts": []}
+    averages = (
+        rfm.groupby("Cluster")[["Recency", "Frequency", "Monetary"]]
+        .mean()
+        .round(2)
+        .reset_index()
+        .rename(columns={"Cluster": "cluster", "Recency": "recency",
+                         "Frequency": "frequency", "Monetary": "monetary"})
+    )
+    averages["cluster"] = averages["cluster"].astype(str)
+    counts = rfm["Cluster"].value_counts().reset_index()
+    counts.columns = ["cluster", "customers"]
+    counts["cluster"] = counts["cluster"].astype(str)
+    return {
+        "averages": averages.to_dict(orient="records"),
+        "counts":   counts.to_dict(orient="records"),
+    }
+
+
+@app.get("/api/customers/top")
+def top_customers():
+    _, rfm, _ = get_pipeline()
+    if rfm is None:
+        return []
+    top = (
+        rfm.nlargest(5, "Monetary")[["CustomerID", "Recency", "Frequency", "Monetary"]]
+        .reset_index(drop=True)
+        .rename(columns={"CustomerID": "customer_id", "Recency": "recency",
+                         "Frequency": "frequency", "Monetary": "monetary"})
+    )
+    top["customer_id"] = top["customer_id"].astype(str)
+    return top.to_dict(orient="records")
+
+
+@app.get("/api/products/top")
+def top_products():
+    df, _, _ = get_pipeline()
+    if df is None:
+        return []
+    top = df.groupby("Description")["Quantity"].sum().nlargest(5).reset_index()
+    top.columns = ["product", "quantity_sold"]
+    return top.to_dict(orient="records")
+
+
+@app.get("/api/products")
+def products():
+    df, _, _ = get_pipeline()
+    if df is None:
+        return []
+    prods = (
+        df.drop_duplicates("StockCode")[["StockCode", "Description"]]
+        .sort_values("Description")
+        .rename(columns={"StockCode": "stock_code", "Description": "description"})
+    )
+    return prods.to_dict(orient="records")
+
+
+class RecommendRequest(BaseModel):
+    stock_code: str
+    top_n: int = 5
+
+
+@app.post("/api/recommend")
+def recommend(req: RecommendRequest):
+    df, _, matrix = get_pipeline()
+    if matrix is None:
+        return []
+    product_map = df.drop_duplicates("StockCode").set_index("StockCode")["Description"].to_dict()
+    recs = get_recommendations(matrix, req.stock_code, top_n=req.top_n)
+    return [
+        {"stock_code": code, "description": product_map.get(code, "Unknown"), "similarity": sim}
+        for code, sim in recs
+    ]
+
+
+@app.post("/api/upload")
+async def upload(file: UploadFile = File(...)):
+    content = await file.read()
+    try:
+        if file.filename.endswith(".csv"):
+            df = pd.read_csv(io.BytesIO(content))
+        else:
+            df = pd.read_excel(io.BytesIO(content))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not parse file: {e}")
+    try:
+        df = clean_dataframe(df)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    inserted = insert_dataframe(df)
+    return {"inserted": inserted}
+
+
+class TransactionIn(BaseModel):
+    customer_id:  int
+    invoice_no:   str
+    invoice_date: str
+    stock_code:   str
+    description:  str
+    quantity:     int
+    unit_price:   float
+    country:      str = ""
+
+
+@app.post("/api/transactions")
+def add_transaction(tx: TransactionIn):
+    insert_transaction(
+        tx.customer_id, tx.invoice_no, tx.invoice_date,
+        tx.stock_code, tx.description, tx.quantity, tx.unit_price, tx.country,
+    )
+    return {"success": True}
