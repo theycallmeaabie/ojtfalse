@@ -88,7 +88,8 @@ export default function Segments() {
           ) : segments.length === 0 ? (
             <div className="bg-surface-container-lowest rounded-xl shadow-level-1 p-gutter text-center">
               <span className="material-symbols-outlined text-4xl text-outline mb-3 block">group_off</span>
-              <p className="text-on-surface-variant">No data yet — upload a file to generate segments.</p>
+              <p className="text-on-surface-variant">No data yet — upload a file on the Add Data page to generate segments.</p>
+              <a href="/add-data" className="text-primary text-[14px] font-semibold mt-2 inline-block hover:underline">Go to Add Data</a>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter">
