@@ -80,9 +80,20 @@ pip install -r requirements.txt
 
 ## Running the Application
 
+**Backend**
 ```bash
-streamlit run app_ui.py
+cd backend
+uvicorn main:app --reload
 ```
+
+**Frontend**
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open `http://localhost:5173` in your browser.
 
 ---
 
