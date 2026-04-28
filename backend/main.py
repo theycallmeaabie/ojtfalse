@@ -5,11 +5,11 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from src.db import init_db, load_dataframe, insert_dataframe, insert_transaction
-from src.preprocessing import clean_dataframe
-from src.rfm import compute_rfm
-from src.clustering import add_clusters
-from src.recommender import build_item_matrix, get_recommendations
+from db import init_db, load_dataframe, insert_dataframe, insert_transaction
+from preprocessing import clean_dataframe
+from rfm import compute_rfm
+from clustering import add_clusters
+from recommender import build_item_matrix, get_recommendations
 
 app = FastAPI()
 
