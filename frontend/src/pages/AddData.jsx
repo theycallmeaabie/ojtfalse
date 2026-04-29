@@ -1,25 +1,14 @@
 import { useState, useRef } from 'react'
 import TopBar from '../components/TopBar'
-import { uploadFile, addTransaction } from '../api'
+import { uploadFile } from '../api'
 
 export default function AddData() {
-  const [tab, setTab] = useState('upload')
-
-  // Upload state
   const [file, setFile] = useState(null)
   const [dragging, setDragging] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState(null)
   const [uploadError, setUploadError] = useState(null)
   const fileInputRef = useRef()
-
-  // Manual entry state
-  const [form, setForm] = useState({
-    customer_id: '', invoice_no: '', invoice_date: '',
-    stock_code: '', description: '', quantity: '', unit_price: '', country: '',
-  })
-  const [submitting, setSubmitting] = useState(false)
-  const [submitMsg, setSubmitMsg] = useState(null)
 
   function handleDrop(e) {
     e.preventDefault()
@@ -44,36 +33,6 @@ export default function AddData() {
     }
   }
 
-  function handleFormChange(e) {
-    setForm(f => ({ ...f, [e.target.name]: e.target.value }))
-  }
-
-  async function handleSubmitTransaction(e) {
-    e.preventDefault()
-    setSubmitting(true)
-    setSubmitMsg(null)
-    try {
-      await addTransaction({
-        customer_id:  parseInt(form.customer_id),
-        invoice_no:   form.invoice_no,
-        invoice_date: form.invoice_date,
-        stock_code:   form.stock_code,
-        description:  form.description,
-        quantity:     parseInt(form.quantity),
-        unit_price:   parseFloat(form.unit_price),
-        country:      form.country,
-      })
-      setSubmitMsg('Transaction added successfully.')
-      setForm({ customer_id: '', invoice_no: '', invoice_date: '', stock_code: '', description: '', quantity: '', unit_price: '', country: '' })
-    } catch {
-      setSubmitMsg('Something went wrong. Check your inputs.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const inputCls = 'w-full bg-surface-container border-2 border-transparent rounded-lg p-3 text-[16px] text-on-surface focus:bg-surface-container-lowest focus:border-primary focus:outline-none transition-colors'
-
   return (
     <div className="flex flex-col h-full">
       <TopBar title="Add Data Overview" />
@@ -86,26 +45,7 @@ export default function AddData() {
             <p className="text-[16px] text-on-surface-variant">Securely bring your sales and customer data into Retail Insights.</p>
           </div>
 
-          {/* Tabs */}
-          <div className="flex border-b border-outline-variant mb-8 gap-8">
-            {['upload', 'manual'].map(t => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`pb-3 border-b-2 text-[14px] font-semibold tracking-wide transition-colors ${
-                  tab === t
-                    ? 'border-primary text-primary'
-                    : 'border-transparent text-on-surface-variant hover:text-on-surface hover:border-outline'
-                }`}
-              >
-                {t === 'upload' ? 'Upload File' : 'Manual Entry'}
-              </button>
-            ))}
-          </div>
-
-          {/* Upload Tab */}
-          {tab === 'upload' && (
-            <div className="space-y-gutter">
+          <div className="space-y-gutter">
               {/* Step 1: File drop */}
               <section className="bg-surface-container-lowest rounded-xl p-gutter shadow-level-1 border border-transparent hover:border-primary/20 transition-colors">
                 <div className="flex items-center gap-3 mb-6">
@@ -196,76 +136,6 @@ export default function AddData() {
                 </section>
               )}
             </div>
-          )}
-
-          {/* Manual Entry Tab */}
-          {tab === 'manual' && (
-            <section className="bg-surface-container-lowest rounded-xl p-gutter shadow-level-1">
-              <h2 className="text-[20px] font-semibold text-on-surface mb-6">Enter Single Record</h2>
-              <form className="space-y-6 max-w-2xl" onSubmit={handleSubmitTransaction}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-[14px] font-semibold tracking-wide text-on-surface mb-2">Customer ID</label>
-                    <input name="customer_id" value={form.customer_id} onChange={handleFormChange} className={inputCls} placeholder="e.g. 12345" type="number" required />
-                  </div>
-                  <div>
-                    <label className="block text-[14px] font-semibold tracking-wide text-on-surface mb-2">Invoice No.</label>
-                    <input name="invoice_no" value={form.invoice_no} onChange={handleFormChange} className={inputCls} placeholder="e.g. INV-001" required />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-[14px] font-semibold tracking-wide text-on-surface mb-2">Stock Code</label>
-                    <input name="stock_code" value={form.stock_code} onChange={handleFormChange} className={inputCls} placeholder="e.g. 84406B" required />
-                  </div>
-                  <div>
-                    <label className="block text-[14px] font-semibold tracking-wide text-on-surface mb-2">Description</label>
-                    <input name="description" value={form.description} onChange={handleFormChange} className={inputCls} placeholder="e.g. White Hanging Heart" required />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-[14px] font-semibold tracking-wide text-on-surface mb-2">Quantity</label>
-                    <input name="quantity" value={form.quantity} onChange={handleFormChange} className={inputCls} placeholder="0" type="number" min="1" required />
-                  </div>
-                  <div>
-                    <label className="block text-[14px] font-semibold tracking-wide text-on-surface mb-2">Unit Price</label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-3.5 text-on-surface-variant">$</span>
-                      <input name="unit_price" value={form.unit_price} onChange={handleFormChange} className={`${inputCls} pl-7`} placeholder="0.00" type="number" step="0.01" min="0.01" required />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[14px] font-semibold tracking-wide text-on-surface mb-2">Transaction Date</label>
-                    <input name="invoice_date" value={form.invoice_date} onChange={handleFormChange} className={inputCls} type="date" required />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[14px] font-semibold tracking-wide text-on-surface mb-2">Country (optional)</label>
-                  <input name="country" value={form.country} onChange={handleFormChange} className={inputCls} placeholder="e.g. United Kingdom" />
-                </div>
-
-                {submitMsg && (
-                  <div className={`rounded-lg px-4 py-3 text-[14px] ${submitMsg.includes('success') ? 'bg-green-50 text-green-800' : 'bg-error-container text-on-error-container'}`}>
-                    {submitMsg}
-                  </div>
-                )}
-
-                <div className="pt-6 border-t border-outline-variant flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={submitting}
-                    className="px-8 py-2.5 bg-primary text-on-primary rounded-lg text-[14px] font-semibold hover:opacity-90 transition-opacity shadow-sm disabled:opacity-60"
-                  >
-                    {submitting ? 'Saving…' : 'Submit Record'}
-                  </button>
-                </div>
-              </form>
-            </section>
-          )}
 
         </div>
       </div>
